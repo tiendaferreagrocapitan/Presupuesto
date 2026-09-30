@@ -616,6 +616,12 @@
                 this.ctx.emit('records:updated', this.history);
             });
 
+            this.ctx.on('records:delete_record', (id) => {
+                this.history = this.history.filter(r => r.id !== id);
+                localStorage.setItem('budget_history', JSON.stringify(this.history));
+                this.ctx.emit('records:updated', this.history);
+            });
+
             // Enviar primer render de historial tras cargar
             setTimeout(() => this.ctx.emit('records:updated', this.history), 200);
         }
@@ -1211,7 +1217,10 @@
                 <div style="border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-bottom:10px; background:white; position:relative;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                         <strong>👤 ${r.cliente.nombre}</strong>
-                        <span style="color:#64748b; font-size:0.75rem;">📅 ${new Date(r.fecha).toLocaleDateString()} ${new Date(r.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        <div>
+                            <span style="color:#64748b; font-size:0.75rem; margin-right: 8px;">📅 ${new Date(r.fecha).toLocaleDateString()} ${new Date(r.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <button onclick="if(confirm('¿Seguro que deseas eliminar este registro?')) app.emit('records:delete_record', ${r.id})" style="background:var(--danger); color:white; border:none; border-radius:4px; padding:2px 8px; font-weight:bold; cursor:pointer;" title="Eliminar Registro">✕</button>
+                        </div>
                     </div>
                     <div style="font-size:0.85rem; color:#475569; margin-bottom:12px;">
                         📦 ${r.items.length} Items | Total: <strong style="color:var(--primary);">$${r.total}</strong>
@@ -1247,8 +1256,28 @@
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js').then(reg => {
                 console.log('Service Worker registrado correctamente (PWA activa). Scope:', reg.scope);
+                
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            if (confirm('✨ ¡Hay una nueva actualización disponible! ¿Deseas recargar la aplicación ahora para aplicarla?')) {
+                                window.location.reload();
+                            }
+                        }
+                    });
+                });
+                
             }).catch(err => {
                 console.warn('Error al registrar Service Worker:', err);
+            });
+            
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    window.location.reload();
+                    refreshing = true;
+                }
             });
         });
     }
