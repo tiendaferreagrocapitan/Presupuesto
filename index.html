@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cotizador POS & Solar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#047857">
+    <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
+    <style>
+        :root {
+            --primary: #047857;
+            --secondary: #059669;
+            --bg: #f0fdf4;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --border: #d1fae5;
+            --danger: #ef4444;
+            --wa: #25D366;
+            --mail: #ea4335;
+            --print: #4f46e5;
+            --info: #3b82f6;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; padding-bottom: 80px; }
+        
+        .navbar { display: flex; background: var(--primary); padding: 10px 10px 0 10px; gap: 5px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-x: auto; }
+        .tab-btn { flex: 1; min-width: 90px; padding: 12px; border: none; background: rgba(255,255,255,0.2); color: white; border-radius: 8px 8px 0 0; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.85rem; white-space: nowrap; }
+        .tab-btn.active { background: var(--bg); color: var(--primary); }
+        
+        .container { max-width: 700px; margin: 0 auto; padding: 12px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        h1 { font-size: 1.4rem; color: var(--primary); text-align: center; margin-bottom: 15px; }
+        
+        .card-form { background: var(--surface); padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 16px; border: 1px solid var(--border); }
+        .section-title { margin-top: 0; margin-bottom: 12px; font-size: 1.05rem; color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; position: relative; }
+        .form-group.full { grid-column: span 2; }
+        label { font-size: 0.8rem; font-weight: 700; color: #475569; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; background: #f8fafc; }
+        input:focus, select:focus { outline: none; border-color: var(--primary); background: white; }
+        
+        button.btn-add { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(4, 120, 87, 0.2); transition: transform 0.1s; }
+        button.btn-add:active { background: var(--secondary); transform: scale(0.98); }
+        button.btn-secondary { background: #e2e8f0; color: #0f172a; box-shadow: none; }
+
+        /* Autocomplete List */
+        .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #cbd5e1; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; }
+        .autocomplete-item { padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 0.9rem; }
+        .autocomplete-item:hover { background: #f0fdf4; color: var(--primary); }
+        
+        .client-info-box { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.85rem; display: none; }
+        .client-info-box.has-debt { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
+        /* Tienda Layout */
+        .store-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px; }
+        .product-card { background: white; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+        .product-card h4 { margin: 0; font-size: 0.95rem; color: #0f172a; }
+        .product-card .prices { display: flex; justify-content: space-between; font-size: 0.85rem; color: #64748b; }
+        .product-card .prices strong { color: var(--primary); }
+        .product-actions { display: flex; gap: 5px; margin-top: 5px; }
+        
+        /* Resultados y Combo List */
+        .results-panel { background: white; padding: 16px; border-radius: 12px; border: 2px solid var(--primary); margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .results-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px dashed var(--border); padding-bottom: 10px; margin-bottom: 10px; }
+        .results-header h2 { margin: 0; font-size: 1.1rem; color: var(--primary); }
+        .combo-list { list-style: none; padding: 0; margin: 0; }
+        .combo-list li { padding: 12px 0; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 4px; }
+        
+        .row-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; overflow: hidden; }
+        .combo-price { font-weight: bold; color: var(--primary); font-size: 1rem; min-width: 70px; text-align: right; }
+        .qty-container { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #475569; margin-top: 2px; }
+        .qty-input, .price-input { padding: 4px; border: 1px solid #94a3b8; border-radius: 4px; font-weight: bold; color: var(--primary); background: white; font-size: 0.85rem; text-align: right; }
+        .qty-input { width: 50px; text-align: center; }
+        
+        .total-box { margin-top: 15px; padding: 16px; background: #ecfdf5; border-radius: 8px; text-align: right; border: 1px solid var(--primary); }
+        .total-box h3 { margin: 0; font-size: 1.5rem; color: var(--primary); }
+
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+        .btn-action { padding: 12px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: white; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+        .btn-wa { background: var(--wa); }
+        .btn-mail { background: var(--mail); }
+        .btn-print { background: var(--print); }
+        .btn-clear { background: var(--danger); grid-column: span 2; }
+        
+        .items-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
+        .status-badge.offline { background: #fee2e2; color: #ef4444; }
+        .status-badge.online { background: #dcfce3; color: #22c55e; }
+        .status-badge.loading { background: #fef08a; color: #ca8a04; }
+
+        @media print {
+            @page { size: 80mm auto; margin: 0; }
+            body { 
+                background: white; 
+                color: black; 
+                width: 80mm; /* Forzar el ancho del ticket */
+                margin: 0; 
+                padding: 4mm; 
+                font-family: 'Courier New', Courier, monospace; /* Fuente clásica de tickets */
+                font-size: 12px;
+            }
+            .navbar, .btn-add, .btn-delete, .action-grid, .store-grid, #store-search-bar, button { display: none !important; }
+            .container { max-width: 100%; padding: 0; margin: 0; }
+            .card-form { box-shadow: none; border: none; padding: 0; margin-bottom: 10px; }
+            
+            /* Transformar los inputs a texto plano para el ticket */
+            input, select { 
+                border: none !important; 
+                background: transparent !important; 
+                padding: 0; 
+                margin: 0; 
+                font-weight: bold; 
+                color: black;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
+                width: 50px;
+            }
+            input#clienteNombre, input#clienteCedula, input#clienteTelefono { width: 100%; display: block; margin-bottom: 4px; }
+            
+            /* Estilos de ticket crudo */
+            .results-panel { border: none; border-top: 2px dashed black; border-bottom: 2px dashed black; border-radius: 0; padding: 8px 0; }
+            .total-box { border: none; background: transparent; border-radius: 0; text-align: right; margin-top: 10px; }
+            .total-box h3, .combo-price, h1, .section-title, .results-header h2 { color: black !important; font-size: 14px; margin: 5px 0;}
+            .combo-price { font-size: 18px; font-weight: bold; }
+            
+            /* Limpiar decoraciones */
+            .client-info-box { border: none; padding: 0; margin: 0; }
+            .print-only { display: block !important; }
+        }
+        .print-only { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="navbar">
+    <button class="tab-btn active" data-target="tab-cotizador">🛒 POS</button>
+    <button class="tab-btn" data-target="tab-solar">☀️ Kit Solar</button>
+    <button class="tab-btn" data-target="tab-registros">📂 Registros</button>
+    <button class="tab-btn" data-target="tab-config">⚙️ Config</button>
+    <button class="tab-btn" id="btn-install" style="display:none; background:#ea580c; color:white;">📱 Instalar</button>
+</div>
+
+<div class="container">
+    
+    <!-- PESTAÑA: COTIZADOR PRINCIPAL -->
+    <div id="tab-cotizador" class="tab-content active">
+        <h1>🛒 Punto de Venta (POS)</h1>
+        <div style="text-align: center; margin-bottom: 15px;">
+            <span id="db-status" class="status-badge offline">Cargando base de datos...</span>
+        </div>
+        
+        <!-- DATOS DEL CLIENTE -->
+        <div class="card-form">
+            <div id="ticket-header" class="print-only" style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 5px; margin-bottom: 10px;">
+                <h2 id="tkt-nombre" style="margin:0; font-size: 16px; font-weight:bold;">MI EMPRESA C.A.</h2>
+                <div id="tkt-rif" style="font-size: 12px;"></div>
+                <div id="tkt-dir" style="font-size: 12px;"></div>
+                <div id="tkt-tlf" style="font-size: 12px;"></div>
+                <div style="margin-top: 5px; font-weight: bold; font-size: 14px;">PRESUPUESTO</div>
+            </div>
+            
+            <h3 class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>
+                    👤 Datos del Cliente
+                    <span style="font-size: 0.75rem; font-weight: normal; color: var(--info); margin-left: 10px;">🔍 Busca en DB</span>
+                </span>
+                <button onclick="app.emit('ui:clear_client')" style="background:var(--bg-card); color:var(--text-light); border:1px solid #ccc; padding:4px 8px; border-radius:4px; font-size:0.8rem; cursor:pointer;">🧹 Limpiar</button>
+            </h3>
+            <div class="form-group full" style="margin-bottom: 10px;">
+                <label>Buscar Cliente (Nombre o Cédula)</label>
+                <input type="text" id="buscadorCliente" placeholder="Escribe para buscar cliente en DB..." autocomplete="off">
+                <div id="listaClientes" class="autocomplete-list"></div>
+            </div>
+            
+            <div id="client-info" class="client-info-box">
+                <strong id="info-cliente-nombre"></strong> <br>
+                Límite de Crédito: <span id="info-cliente-credito"></span> | Saldo Deuda: <strong id="info-cliente-deuda"></strong>
+            </div>
+
+            <div class="form-row" style="margin-top: 10px;">
+                <div class="form-group full">
+                    <label>Nombre y Apellido</label>
+                    <input type="text" id="clienteNombre" value="Cliente General" placeholder="Ej. Juan Pérez">
+                </div>
+                <div class="form-group">
+                    <label>Cédula/RIF</label>
+                    <input type="text" id="clienteCedula" placeholder="Ej. V-12345678">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono (WhatsApp)</label>
+                    <input type="tel" id="clienteTelefono" placeholder="Ej. 04141234567">
+                </div>
+            </div>
+        </div>
+
+        <!-- TIENDA / CATALOGO -->
+        <div class="card-form">
+            <h3 class="section-title">🛒 Catálogo de Tienda</h3>
+            <div class="form-group full" id="store-search-bar">
+                <input type="text" id="buscadorTienda" placeholder="🔍 Buscar productos (Ej. Cable, Batería...)" style="border: 2px solid var(--primary);">
+            </div>
+            <div class="store-grid" id="gridTienda"></div>
+        </div>
+
+        <!-- AREA DE RESULTADOS DEL PRESUPUESTO -->
+        <div id="areaResultados" style="display: none;">
+            <div class="results-panel">
+                <div class="results-header">
+                    <h2>📦 Cotización Final</h2>
+                    <div style="font-size: 0.75rem; color: #64748b; text-align: right;" id="fechaEmision"></div>
+                </div>
+                <ul class="combo-list" id="listaPresupuesto"></ul>
+                <div class="total-box">
+                    <p>TOTAL PRESUPUESTO</p>
+                    <h3>$<span id="granTotal">0.00</span></h3>
+                </div>
+                
+                <div id="ticket-footer" class="print-only" style="text-align: center; border-top: 1px dashed black; margin-top: 10px; padding-top: 10px;">
+                    <div style="font-size: 12px; font-weight: bold;">Presupuesto válido por <span id="tkt-dias">3</span> días.</div>
+                    <div style="font-size: 12px;">¡Gracias por preferirnos!</div>
+                </div>
+            </div>
+
+            <div class="action-grid">
+                <button class="btn-action btn-wa" id="btn-wa">💬 Enviar WhatsApp</button>
+                <button class="btn-action btn-mail" id="btn-mail">✉️ Enviar Correo</button>
+                <button class="btn-action btn-print" id="btn-print">🖨️ Guardar e Imprimir</button>
+                <button class="btn-action btn-clear" id="btn-clear">🗑️ Limpiar Todo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PESTAÑA: KIT SOLAR -->
+    <div id="tab-solar" class="tab-content">
+        <h1>☀️ Calculadora Kit Solar</h1>
+        <p style="font-size: 0.85rem; color: #64748b; margin-top: 0;">Los equipos calculados aquí se añadirán automáticamente a la lista principal en el Cotizador POS.</p>
+        
+        <div class="card-form" style="margin-bottom: 15px;">
+            <h3 class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>⚙️ Equipos del Kit (Inventario)</span>
+                <button onclick="app.emit('ui:clear_kit')" style="background:var(--bg); color:var(--danger); border:1px solid var(--danger); padding:4px 8px; border-radius:4px; font-size:0.8rem; cursor:pointer;">🧹 Limpiar Kit</button>
+            </h3>
+            <div class="form-row" style="margin-bottom: 10px;">
+                <div class="form-group">
+                    <label>Inversor</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-inversor" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-inversor" class="kit-search" placeholder="Inversor Genérico (3000W) - $580" autocomplete="off">
+                            <input type="hidden" id="sel-inversor">
+                            <div id="list-sel-inversor" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Batería</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-bateria" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-bateria" class="kit-search" placeholder="Batería Genérica (100Ah) - $230" autocomplete="off">
+                            <input type="hidden" id="sel-bateria">
+                            <div id="list-sel-bateria" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row" style="margin-bottom: 10px;">
+                <div class="form-group">
+                    <label>Panel Solar</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-panel" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-panel" class="kit-search" placeholder="Panel Genérico (300W) - $135" autocomplete="off">
+                            <input type="hidden" id="sel-panel">
+                            <div id="list-sel-panel" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Controlador MPPT</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-controlador" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-controlador" class="kit-search" placeholder="Controlador Genérico (60A) - $180" autocomplete="off">
+                            <input type="hidden" id="sel-controlador">
+                            <div id="list-sel-controlador" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Breaker AC</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-breaker-ac" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-breaker-ac" class="kit-search" placeholder="Breaker AC Genérico - $10" autocomplete="off">
+                            <input type="hidden" id="sel-breaker-ac">
+                            <div id="list-sel-breaker-ac" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Breaker DC</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-breaker-dc" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-breaker-dc" class="kit-search" placeholder="Breaker DC Genérico - $15" autocomplete="off">
+                            <input type="hidden" id="sel-breaker-dc">
+                            <div id="list-sel-breaker-dc" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Cable Solar</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="qty-sel-cable" value="1" min="1" style="width: 70px; padding: 8px; font-weight: bold; text-align: center; color: var(--primary);" onchange="app.plugins.Budget.procesarKitSolar('manual')">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text" id="input-sel-cable" class="kit-search" placeholder="Cable Solar Genérico - $1.5" autocomplete="off">
+                            <input type="hidden" id="sel-cable">
+                            <div id="list-sel-cable" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultados-solar" style="display: none; margin-bottom: 20px; padding: 15px; background: #eef2ff; border-radius: 8px; border: 1px solid var(--primary);">
+            <h3 style="margin-top: 0; margin-bottom: 15px; color: var(--primary);">⚡ Kit Dimensionado Automáticamente</h3>
+            <div id="listaResultadosSolar"></div>
+            <div style="text-align: right; margin-top: 10px; font-size: 1.2rem; font-weight: bold; color: var(--primary);">Total Kit: $<span id="total-kit-solar">0.00</span></div>
+            
+            <div class="action-grid" style="margin-top: 15px;">
+                <button class="btn-action btn-wa" id="btn-wa-solar">💬 WhatsApp</button>
+                <button class="btn-action btn-mail" id="btn-mail-solar">📧 Correo</button>
+                <button class="btn-action btn-print" id="btn-print-solar">🖨️ Imprimir</button>
+                <button class="btn-action btn-secondary" style="background: #475569; color: white;" onclick="document.querySelector('[data-target=\'tab-cotizador\']').click()">Cotización 👉</button>
+            </div>
+        </div>
+
+        <div class="card-form">
+            <h3 class="section-title">🔌 Cargas a Respaldar</h3>
+            <p style="font-size: 0.85rem; color: #64748b; margin-top: 0; margin-bottom: 10px;">(Opcional) Añade cargas si deseas que la calculadora ajuste el kit automáticamente.</p>
+            <div class="form-group full" style="margin-bottom: 10px;">
+                <label>Electrodoméstico</label>
+                <input type="text" id="nombreCarga" placeholder="Ej. Nevera, TV, Bombillo..." autocomplete="off" name="carga_nombre_random">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Cantidad</label>
+                    <input type="number" id="cantidadCarga" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Watts c/u</label>
+                    <input type="number" id="wattsCarga" placeholder="W" min="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>Horas de uso al día</label>
+                    <input type="number" id="horasCarga" placeholder="1 a 24 hrs" min="1" max="24">
+                </div>
+            </div>
+            <button class="btn-add" id="btn-add-carga">+ Añadir Carga al Kit Solar</button>
+            <div class="items-list" id="listaCargas" style="margin-top: 15px; margin-bottom: 0;"></div>
+        </div>
+    </div>
+
+    <!-- PESTAÑA: REGISTROS -->
+    <div id="tab-registros" class="tab-content">
+        <h1>📂 Registros de Presupuestos</h1>
+        <div class="card-form">
+            <h3 class="section-title">Historial Guardado Localmente</h3>
+            <p style="font-size: 0.85rem; color: #64748b; margin-top: 0;">Aquí puedes recuperar y re-imprimir presupuestos anteriores creados en este dispositivo.</p>
+            <div id="lista-registros" style="margin-top: 15px;">
+                <!-- Records injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PESTAÑA: CONFIGURACIÓN -->
+    <div id="tab-config" class="tab-content">
+        <h1>⚙️ Configuración DB</h1>
+        <div class="card-form">
+            <h3 class="section-title">☁️ Conexión Supabase (Nube)</h3>
+            <div class="form-group full" style="margin-bottom: 10px;">
+                <label>Supabase URL</label>
+                <input type="text" id="sb-url" placeholder="https://xxxx.supabase.co" autocomplete="off" name="sb_url_random">
+            </div>
+            <div class="form-group full" style="margin-bottom: 10px;">
+                <label>Supabase Anon/Secret Key</label>
+                <input type="password" id="sb-key" placeholder="eyJh..." autocomplete="new-password">
+            </div>
+            <button class="btn-add btn-save" id="btn-save-config" style="margin-top:10px;">💾 Guardar y Sincronizar</button>
+        </div>
+
+        <div class="card-form" style="margin-top: 15px;">
+            <h3 class="section-title">🏢 Datos de la Empresa (Para Ticket)</h3>
+            <div class="form-group full" style="margin-bottom: 10px;">
+                <label>Nombre de la Empresa</label>
+                <input type="text" id="conf-empresa-nombre" placeholder="Ej: Mi Empresa C.A.">
+            </div>
+            <div class="form-row" style="margin-bottom: 10px;">
+                <div class="form-group">
+                    <label>RIF / NIT</label>
+                    <input type="text" id="conf-empresa-rif" placeholder="Ej: J-12345678-9">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="text" id="conf-empresa-tlf" placeholder="Ej: 0414-1234567">
+                </div>
+            </div>
+            <div class="form-group full" style="margin-bottom: 10px;">
+                <label>Dirección</label>
+                <input type="text" id="conf-empresa-dir" placeholder="Ej: Av. Principal, Local 1">
+            </div>
+            <div class="form-group full">
+                <label>Validez Presupuesto (Días)</label>
+                <input type="number" id="conf-empresa-dias" value="3" min="1">
+            </div>
+            <button class="btn-add btn-save" id="btn-save-empresa" style="margin-top:10px;">💾 Guardar Datos Empresa</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // -----------------------------------------------------
+    // CORE ARQUITECTURA
+    // -----------------------------------------------------
+    class AppContext {
+        constructor() { this.plugins = {}; this.events = {}; }
+        use(name, pluginClass) {
+            const plugin = new pluginClass(this);
+            this.plugins[name] = plugin;
+            if(plugin.install) plugin.install();
+        }
+        on(event, cb) {
+            if(!this.events[event]) this.events[event] = [];
+            this.events[event].push(cb);
+        }
+        emit(event, payload) {
+            if(this.events[event]) this.events[event].forEach(cb => cb(payload));
+        }
+    }
+    const app = new AppContext();
+
+    // -----------------------------------------------------
+    // PLUGIN: DATOS & SUPABASE (CACHÉ LOCAL)
+    // -----------------------------------------------------
+    class DataPlugin {
+        constructor(ctx) { 
+            this.ctx = ctx; 
+            this.db = { clientes: [], productos: [], inversores: [], baterias: [], paneles: [], controladores: [] };
+            
+            // Mock Data Offline
+            this.fallbackDb = {
+                productos: [
+                    { id: 1, nombre: "Motosierra Roccia 5800", costo: 100, precio: 150.0, precio_mayor: 135.0, stock: 10, categoria: "Equipos y maquinarias" },
+                    { id: 2, nombre: "MotoSIerra Ferven 5800", costo: 100, precio: 140.0, precio_mayor: 130.0, stock: 5, categoria: "Equipos y maquinarias" },
+                    { id: 4, nombre: "Cable AWG 12 Solar", costo: 1, precio: 1.5, precio_mayor: 1.2, stock: 100, categoria: "Cables" }
+                ],
+                clientes: [
+                    { id: 1, nombre: "Stewart montero", numero_id: "26490000", celular: "04245224500", limite_credito: 0, saldo_negativo_historico: 0 },
+                    { id: 4, nombre: "Junior Figueredo", numero_id: "25815477", celular: "04245988736", limite_credito: 1000, saldo_negativo_historico: 150 }
+                ],
+                inversores: [{ model: "Inversor Must 3KW Híbrido", w: 3000, v: 24, precio: 580, hibrido: true }],
+                baterias: [{ model: "Batería GEL 100Ah", ah: 100, v: 12, precio: 230 }],
+                paneles: [{ model: "Panel 300W", w: 300, precio: 135 }],
+                controladores: [{ model: "Controlador MPPT 60A", a: 60, precio: 180 }]
+            };
+        }
+        
+        install() {
+            this.ctx.on('config:loaded', async (config) => {
+                const statusBadge = document.getElementById('db-status');
+                
+                const cacheLocal = localStorage.getItem('cached_pos_db');
+                if (cacheLocal) {
+                    this.db = JSON.parse(cacheLocal);
+                    statusBadge.className = 'status-badge loading'; 
+                    statusBadge.innerText = 'Verificando nube...';
+                } else {
+                    this.db = this.fallbackDb;
+                    statusBadge.className = 'status-badge offline'; 
+                    statusBadge.innerText = 'Sin caché. Usando datos demo.';
+                }
+                
+                this.ctx.emit('db:ready', this.db);
+
+                if (!config.url || !config.key) {
+                    statusBadge.className = 'status-badge offline'; 
+                    statusBadge.innerText = cacheLocal ? 'Offline (Caché Local)' : 'Offline (Sin configurar)';
+                    return;
+                }
+
+                try {
+                    let baseUrl = config.url.replace(/\/rest\/v1\/?$/i, '').replace(/\/$/, '');
+                    
+                    // Inicializar el motor local de SQLite
+                    statusBadge.className = 'status-badge loading'; 
+                    statusBadge.innerText = 'Iniciando motor SQLite...';
+                    const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
+                    
+                    // Descargar el archivo .db entero desde el Storage Bucket
+                    statusBadge.innerText = 'Descargando base de 2MB...';
+                    const dbUrl = `${baseUrl}/storage/v1/object/public/BaseTienda/sistema_pos_v2.db`;
+                    const res = await fetch(dbUrl, { 
+                        headers: { 'Authorization': `Bearer ${config.key}` } 
+                    });
+                    
+                    if (!res.ok) throw new Error(`HTTP ${res.status} - No se encontró el archivo en Storage`);
+                    
+                    const buffer = await res.arrayBuffer();
+                    const dbSQLite = new SQL.Database(new Uint8Array(buffer));
+                    
+                    let newDb = { ...this.db };
+                    
+                    // Función para extraer una tabla como arreglo de JSON
+                    const extractTable = (tName) => {
+                        try {
+                            const result = dbSQLite.exec(`SELECT * FROM ${tName}`);
+                            if (result.length === 0) return [];
+                            const cols = result[0].columns;
+                            return result[0].values.map(row => {
+                                let obj = {};
+                                cols.forEach((col, i) => obj[col] = row[i]);
+                                return obj;
+                            });
+                        } catch (e) { return []; }
+                    };
+
+                    const tablasAEscanear = ['clientes', 'productos', 'categorias', 'proveedores', 'config_empresa', 'usuarios'];
+                    let totalDescargado = 0;
+                    
+                    tablasAEscanear.forEach(t => {
+                        const data = extractTable(t);
+                        if (data.length > 0) {
+                            newDb[t] = data;
+                            totalDescargado += data.length;
+                        }
+                    });
+                    
+                    dbSQLite.close();
+
+                    // Protección contra cache corrupto o vacío
+                    if ((!newDb.productos || newDb.productos.length === 0) && (!newDb.clientes || newDb.clientes.length === 0)) {
+                         newDb.productos = this.fallbackDb.productos;
+                         newDb.clientes = this.fallbackDb.clientes;
+                    }
+
+                    const isDiff = JSON.stringify(newDb) !== JSON.stringify(this.db);
+                    if (isDiff) {
+                        this.db = newDb;
+                        localStorage.setItem('cached_pos_db', JSON.stringify(this.db));
+                        this.ctx.emit('db:ready', this.db);
+                    }
+
+                    if (totalDescargado > 0) {
+                        statusBadge.className = 'status-badge online'; 
+                        statusBadge.innerText = 'Online (Base SQLite Descargada)';
+                    } else {
+                        statusBadge.className = 'status-badge offline'; 
+                        statusBadge.innerText = 'Archivo SQLite vacío';
+                    }
+                    
+                } catch (e) {
+                    statusBadge.className = 'status-badge offline'; 
+                    statusBadge.innerText = 'Error: ' + e.message;
+                    console.error("SQLite Sync Error:", e);
+                }
+            });
+        }
+    }
+
+    // -----------------------------------------------------
+    // PLUGIN: HISTORIAL Y REGISTROS
+    // -----------------------------------------------------
+    class RecordsPlugin {
+        constructor(ctx) {
+            this.ctx = ctx;
+            this.history = JSON.parse(localStorage.getItem('budget_history')) || [];
+            
+            // Generar identidad de usuario anónima persistente
+            this.userId = localStorage.getItem('pos_user_id');
+            if (!this.userId) {
+                this.userId = 'Usuario-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+                localStorage.setItem('pos_user_id', this.userId);
+            }
+        }
+
+        install() {
+            this.ctx.on('budget:save_record', (data) => {
+                const record = {
+                    id: Date.now(),
+                    fecha: new Date().toISOString(),
+                    cliente: data.cliente,
+                    total: data.total,
+                    items: data.items,
+                    cargas: data.cargas,
+                    vendedor: this.userId
+                };
+                this.history.unshift(record);
+                if (this.history.length > 50) this.history.pop(); // Limite de 50 registros para no saturar memoria
+                
+                localStorage.setItem('budget_history', JSON.stringify(this.history));
+                this.ctx.emit('records:updated', this.history);
+            });
+
+            // Enviar primer render de historial tras cargar
+            setTimeout(() => this.ctx.emit('records:updated', this.history), 200);
+        }
+    }
+
+    // -----------------------------------------------------
+    // PLUGIN: CALCULADORA Y PRESUPUESTO
+    // -----------------------------------------------------
+    class BudgetPlugin {
+        constructor(ctx) {
+            this.ctx = ctx;
+            this.cargas = [];
+            this.itemsPresupuesto = []; 
+        }
+        install() {
+            this.ctx.on('ui:add_carga', (c) => {
+                this.cargas.push({...c, id: Date.now(), pico: c.cantidad * c.watts, energia: c.cantidad * c.watts * c.horas});
+                this.procesarKitSolar();
+            });
+            this.ctx.on('ui:delete_carga', (id) => {
+                this.cargas = this.cargas.filter(e => e.id !== id);
+                this.procesarKitSolar();
+            });
+            this.ctx.on('ui:add_tienda_item', (item) => {
+                this.itemsPresupuesto.push({
+                    id: Date.now().toString(), isSolar: false, nombre: item.nombre, cantidad: item.cantidad,
+                    precioUnitario: item.precio, subtotal: item.cantidad * item.precio
+                });
+                this.procesarKitSolar();
+            });
+            this.ctx.on('ui:remove_item', (id) => {
+                this.itemsPresupuesto = this.itemsPresupuesto.filter(i => i.id !== id.toString());
+                this.procesarKitSolar();
+            });
+            this.ctx.on('ui:update_item', (data) => {
+                let item = this.itemsPresupuesto.find(i => i.id === data.id.toString());
+                if(item) {
+                    item.cantidad = parseFloat(data.cantidad) || 1;
+                    item.precioUnitario = parseFloat(data.precio) || 0;
+                    item.subtotal = item.cantidad * item.precioUnitario;
+                    this.procesarKitSolar();
+                }
+            });
+            this.ctx.on('ui:clear', () => {
+                this.cargas = []; this.itemsPresupuesto = [];
+                this.ctx.emit('budget:updated', { cargas: [], items: [] });
+            });
+            
+            // Permite recargar un presupuesto antiguo en memoria viva
+            this.ctx.on('budget:load_record', (record) => {
+                this.cargas = [...record.cargas];
+                this.itemsPresupuesto = [...record.items];
+                this.ctx.emit('budget:updated', { cargas: this.cargas, items: this.itemsPresupuesto });
+            });
+        }
+
+        procesarKitSolar(mode = 'auto') {
+            this.itemsPresupuesto = this.itemsPresupuesto.filter(i => !i.isSolar);
+            
+            let manualSelection = false;
+            ['sel-inversor', 'sel-bateria', 'sel-panel', 'sel-controlador', 'sel-breaker-ac', 'sel-breaker-dc', 'sel-cable'].forEach(id => {
+                const sel = document.getElementById(id);
+                if(sel && sel.value) manualSelection = true;
+            });
+            
+            if(this.cargas.length === 0 && !manualSelection) {
+                this.ctx.emit('budget:updated', { cargas: this.cargas, items: this.itemsPresupuesto });
+                return;
+            }
+
+            let tPico = 0, tEnergia = 0;
+            this.cargas.forEach(c => { tPico += c.pico; tEnergia += c.energia; });
+            
+            const getSelected = (id, defaultObj) => {
+                const sel = document.getElementById(id);
+                if(sel && sel.value) {
+                    if(sel.value === 'NA') return null; // No aplica
+                    const db = app.plugins.Data.db;
+                    if(db && db.productos) {
+                        const prod = db.productos.find(p => p.id.toString() === sel.value.toString());
+                        if(prod) {
+                            return { ...defaultObj, id: prod.id, nombre: prod.nombre, precio: parseFloat(prod.precio || 0) };
+                        }
+                    }
+                }
+                return defaultObj;
+            };
+
+            const inv = getSelected('sel-inversor', { model: "Inversor Genérico 3KW", w: 3000, v: 24, precio: 580 });
+            const bat = getSelected('sel-bateria', { model: "Batería Genérica 100Ah", ah: 100, v: 12, precio: 230 });
+            const pan = getSelected('sel-panel', { model: "Panel Solar 300W", w: 300, precio: 135 });
+            const ctrl = getSelected('sel-controlador', { model: "Controlador MPPT 60A", a: 60, precio: 180 });
+            const brkAc = getSelected('sel-breaker-ac', { model: "Breaker AC 32A", precio: 10 });
+            const brkDc = getSelected('sel-breaker-dc', { model: "Breaker DC 63A", precio: 15 });
+            const cable = getSelected('sel-cable', { model: "Cable Solar", precio: 1.5 });
+            
+            let qInv, qBat, qPan, qCtrl, qBrkAc, qBrkDc, qCable;
+
+            if (mode === 'auto' && this.cargas.length > 0) {
+                qInv = Math.max(1, Math.ceil((tPico*1.25) / (inv.w || 3000)));
+                qBat = Math.max(1, Math.ceil(tEnergia / (bat.ah * bat.v || 1200)));
+                
+                let energiaDiariaRequerida = tEnergia * 1.3; 
+                let produccionPanel = (pan.w || 300) * 5; 
+                qPan = Math.max(1, Math.ceil(energiaDiariaRequerida / produccionPanel));
+                
+                qCtrl = 1; 
+                qBrkAc = 1; 
+                qBrkDc = Math.ceil(qPan / 2); 
+                qCable = qPan * 10; 
+
+                // Update UI inputs to reflect calculations
+                if (document.getElementById('qty-sel-inversor')) {
+                    document.getElementById('qty-sel-inversor').value = qInv;
+                    document.getElementById('qty-sel-bateria').value = qBat;
+                    document.getElementById('qty-sel-panel').value = qPan;
+                    document.getElementById('qty-sel-controlador').value = qCtrl;
+                    document.getElementById('qty-sel-breaker-ac').value = qBrkAc;
+                    document.getElementById('qty-sel-breaker-dc').value = qBrkDc;
+                    document.getElementById('qty-sel-cable').value = qCable;
+                }
+            } else {
+                // Manual mode or no loads: read from UI inputs
+                qInv = parseInt(document.getElementById('qty-sel-inversor')?.value || 1);
+                qBat = parseInt(document.getElementById('qty-sel-bateria')?.value || 1);
+                qPan = parseInt(document.getElementById('qty-sel-panel')?.value || 1);
+                qCtrl = parseInt(document.getElementById('qty-sel-controlador')?.value || 1);
+                qBrkAc = parseInt(document.getElementById('qty-sel-breaker-ac')?.value || 1);
+                qBrkDc = parseInt(document.getElementById('qty-sel-breaker-dc')?.value || 1);
+                qCable = parseInt(document.getElementById('qty-sel-cable')?.value || 1);
+            }
+            
+            if(inv) this.itemsPresupuesto.push({ id: 'inv', isSolar: true, nombre: `⚡ ${inv.nombre || inv.model}`, cantidad: qInv, precioUnitario: inv.precio, subtotal: qInv * inv.precio });
+            if(bat) this.itemsPresupuesto.push({ id: 'bat', isSolar: true, nombre: `🔋 ${bat.nombre || bat.model}`, cantidad: qBat, precioUnitario: bat.precio, subtotal: qBat * bat.precio });
+            if(pan) this.itemsPresupuesto.push({ id: 'pan', isSolar: true, nombre: `☀️ ${pan.nombre || pan.model}`, cantidad: qPan, precioUnitario: pan.precio, subtotal: qPan * pan.precio });
+            if(ctrl) this.itemsPresupuesto.push({ id: 'ctrl', isSolar: true, nombre: `🕹️ ${ctrl.nombre || ctrl.model}`, cantidad: qCtrl, precioUnitario: ctrl.precio, subtotal: qCtrl * ctrl.precio });
+            if(brkAc) this.itemsPresupuesto.push({ id: 'brkac', isSolar: true, nombre: `🔌 ${brkAc.nombre || brkAc.model}`, cantidad: qBrkAc, precioUnitario: brkAc.precio, subtotal: qBrkAc * brkAc.precio });
+            if(brkDc) this.itemsPresupuesto.push({ id: 'brkdc', isSolar: true, nombre: `🔌 ${brkDc.nombre || brkDc.model}`, cantidad: qBrkDc, precioUnitario: brkDc.precio, subtotal: qBrkDc * brkDc.precio });
+            if(cable) this.itemsPresupuesto.push({ id: 'cab', isSolar: true, nombre: `〰️ ${cable.nombre || cable.model}`, cantidad: qCable, precioUnitario: cable.precio, subtotal: qCable * cable.precio });
+
+            this.ctx.emit('budget:updated', { cargas: this.cargas, items: this.itemsPresupuesto });
+        }
+    }
+
+    // -----------------------------------------------------
+    // PLUGIN: UI
+    // -----------------------------------------------------
+    class UIPlugin {
+        constructor(ctx) { this.ctx = ctx; this.db = null; }
+        install() {
+            this.ctx.on('ui:clear_client', () => {
+                document.getElementById('buscadorCliente').value = '';
+                document.getElementById('clienteNombre').value = 'Cliente General';
+                document.getElementById('clienteCedula').value = '';
+                document.getElementById('clienteTelefono').value = '';
+                document.getElementById('info-cliente-nombre').innerText = '';
+                document.getElementById('info-cliente-credito').innerText = '';
+                document.getElementById('info-cliente-deuda').innerText = '';
+            });
+
+            this.ctx.on('ui:clear_kit', () => {
+                // Restablecer todas las cantidades del kit solar a 1
+                ['inversor', 'bateria', 'panel', 'controlador', 'breaker-ac', 'breaker-dc', 'cable'].forEach(id => {
+                    const el = document.getElementById('qty-sel-' + id);
+                    if(el) el.value = 1;
+                    
+                    const hidden = document.getElementById('sel-' + id);
+                    if(hidden) hidden.value = '';
+                    
+                    const input = document.getElementById('input-sel-' + id);
+                    if(input) input.value = '';
+                });
+                app.plugins.Budget.cargas = [];
+                app.plugins.Budget.procesarKitSolar('auto');
+            });
+
+            this.ctx.on('ui:clear', () => {
+                this.ctx.emit('ui:clear_client');
+                this.ctx.emit('ui:clear_kit');
+            });
+
+            // Tabuladores
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
+                    e.target.classList.add('active');
+                    document.getElementById(e.target.dataset.target).classList.add('active');
+                });
+            });
+
+            // Buscadores
+            const busCli = document.getElementById('buscadorCliente');
+            const listCli = document.getElementById('listaClientes');
+            busCli.addEventListener('input', (e) => {
+                const val = e.target.value.toLowerCase();
+                listCli.innerHTML = '';
+                if(val.length < 2 || !this.db) { listCli.style.display = 'none'; return; }
+                
+                const matches = this.db.clientes.filter(c => c.nombre.toLowerCase().includes(val) || (c.numero_id && c.numero_id.toLowerCase().includes(val))).slice(0,5);
+                if(matches.length > 0) {
+                    listCli.style.display = 'block';
+                    matches.forEach(c => {
+                        const div = document.createElement('div');
+                        div.className = 'autocomplete-item';
+                        div.innerText = `${c.nombre} (${c.numero_id})`;
+                        div.onclick = () => this.seleccionarCliente(c);
+                        listCli.appendChild(div);
+                    });
+                } else { listCli.style.display = 'none'; }
+            });
+
+            document.getElementById('buscadorTienda').addEventListener('input', (e) => this.renderTienda(e.target.value));
+
+            // Acciones Manuales
+            document.getElementById('btn-add-carga').addEventListener('click', () => {
+                const nombre = document.getElementById('nombreCarga').value;
+                const cantidad = parseInt(document.getElementById('cantidadCarga').value);
+                const watts = parseFloat(document.getElementById('wattsCarga').value);
+                const horas = parseFloat(document.getElementById('horasCarga').value);
+                if (nombre && cantidad > 0 && watts > 0 && horas > 0) {
+                    this.ctx.emit('ui:add_carga', { nombre, cantidad, watts, horas });
+                    document.getElementById('nombreCarga').value = '';
+                } else { alert('Datos inválidos de carga.'); }
+            });
+
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                if(confirm('¿Nuevo presupuesto?')) this.ctx.emit('ui:clear');
+            });
+
+            // Disparadores de guardado automático al compartir/imprimir
+            const sendWhatsApp = () => { 
+                if(this.ctx.plugins.Budget.itemsPresupuesto.length === 0) return alert('El presupuesto está vacío.');
+                this.dispararGuardado();
+                const texto = encodeURIComponent(this.generarTextoPresupuesto());
+                let tlf = document.getElementById('clienteTelefono').value.replace(/\D/g, '');
+                let url = tlf ? `https://wa.me/${tlf}?text=${texto}` : `https://wa.me/?text=${texto}`;
+                window.open(url, '_blank');
+            };
+            const sendMail = () => { 
+                if(this.ctx.plugins.Budget.itemsPresupuesto.length === 0) return alert('El presupuesto está vacío.');
+                this.dispararGuardado();
+                const texto = encodeURIComponent(this.generarTextoPresupuesto());
+                const cliNombre = document.getElementById('clienteNombre').value || 'Cliente General';
+                let url = `mailto:?subject=Presupuesto%20-%20${encodeURIComponent(cliNombre)}&body=${texto}`;
+                window.open(url, '_blank');
+            };
+
+            document.getElementById('btn-wa').addEventListener('click', sendWhatsApp);
+            document.getElementById('btn-wa-solar').addEventListener('click', sendWhatsApp);
+            
+            document.getElementById('btn-mail').addEventListener('click', sendMail);
+            document.getElementById('btn-mail-solar').addEventListener('click', sendMail);
+            
+            const doPrint = () => { this.dispararGuardado(); window.print(); };
+            document.getElementById('btn-print').addEventListener('click', doPrint);
+            document.getElementById('btn-print-solar').addEventListener('click', doPrint);
+
+            // Configuración
+            document.getElementById('btn-save-config').addEventListener('click', () => {
+                let url = document.getElementById('sb-url').value.trim();
+                // Limpieza robusta: Si el usuario pegó el "/rest/v1/" al final, se lo quitamos
+                url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/$/, '');
+                
+                let key = document.getElementById('sb-key').value.trim();
+                
+                localStorage.setItem('sb_url', url);
+                localStorage.setItem('sb_key', key);
+                this.ctx.emit('config:loaded', { url: url, key: key });
+            });
+
+            // Listeners
+            this.ctx.on('db:ready', (db) => { this.db = db; this.renderTienda(''); this.poblarSelectsKit(); });
+            this.ctx.on('budget:updated', (data) => this.renderPresupuesto(data));
+            this.ctx.on('records:updated', (history) => this.renderRegistros(history));
+
+            // Init Config
+            document.getElementById('sb-url').value = localStorage.getItem('sb_url') || '';
+            document.getElementById('sb-key').value = localStorage.getItem('sb_key') || '';
+            this.ctx.emit('config:loaded', { url: localStorage.getItem('sb_url'), key: localStorage.getItem('sb_key') });
+
+            // Datos Empresa Ticket
+            document.getElementById('btn-save-empresa').addEventListener('click', () => {
+                localStorage.setItem('conf_nombre', document.getElementById('conf-empresa-nombre').value);
+                localStorage.setItem('conf_rif', document.getElementById('conf-empresa-rif').value);
+                localStorage.setItem('conf_tlf', document.getElementById('conf-empresa-tlf').value);
+                localStorage.setItem('conf_dir', document.getElementById('conf-empresa-dir').value);
+                localStorage.setItem('conf_dias', document.getElementById('conf-empresa-dias').value);
+                this.actualizarDatosTicket();
+                alert('Datos de empresa guardados con éxito.');
+            });
+            
+            document.getElementById('conf-empresa-nombre').value = localStorage.getItem('conf_nombre') || '';
+            document.getElementById('conf-empresa-rif').value = localStorage.getItem('conf_rif') || '';
+            document.getElementById('conf-empresa-tlf').value = localStorage.getItem('conf_tlf') || '';
+            document.getElementById('conf-empresa-dir').value = localStorage.getItem('conf_dir') || '';
+            document.getElementById('conf-empresa-dias').value = localStorage.getItem('conf_dias') || '3';
+            this.actualizarDatosTicket();
+        }
+
+        poblarSelectsKit() {
+            if(!this.db || !this.db.productos) return;
+            const prods = this.db.productos;
+            
+            const initAutocomplete = (id, keyword1, keyword2) => {
+                const input = document.getElementById('input-' + id);
+                const hidden = document.getElementById(id);
+                const list = document.getElementById('list-' + id);
+                if(!input || !hidden || !list) return;
+
+                const defaultFiltered = prods.filter(p => {
+                    const n = p.nombre.toLowerCase();
+                    return keyword2 ? n.includes(keyword1) && n.includes(keyword2) : n.includes(keyword1);
+                });
+
+                const renderList = (items) => {
+                    list.innerHTML = `<div class="autocomplete-item" style="color:var(--danger); font-weight:bold;" onclick="app.plugins.UI.selectKitItem('${id}', 'NA', '-- No Aplica --')">-- No Aplica --</div>`;
+                    items.forEach(p => {
+                        const div = document.createElement('div');
+                        div.className = 'autocomplete-item';
+                        div.innerText = `${p.nombre} - $${p.precio}`;
+                        div.onclick = () => this.selectKitItem(id, p.id, `${p.nombre} - $${p.precio}`);
+                        list.appendChild(div);
+                    });
+                    list.style.display = 'block';
+                };
+
+                // Remove old listeners to avoid duplicates on re-render
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                
+                newInput.addEventListener('focus', () => {
+                    if (newInput.value === '') renderList(defaultFiltered);
+                });
+
+                newInput.addEventListener('input', (e) => {
+                    hidden.value = ''; // clear selection if they type
+                    const val = e.target.value.toLowerCase();
+                    if(val.length === 0) {
+                        renderList(defaultFiltered);
+                        return;
+                    }
+                    // Search in ALL products!
+                    const matches = prods.filter(p => p.nombre.toLowerCase().includes(val) || (p.categoria && p.categoria.toLowerCase().includes(val))).slice(0, 15);
+                    renderList(matches);
+                });
+
+                newInput.addEventListener('blur', () => {
+                    setTimeout(() => list.style.display = 'none', 200);
+                });
+            };
+
+            initAutocomplete('sel-inversor', 'inversor', null);
+            initAutocomplete('sel-bateria', 'bater', null);
+            initAutocomplete('sel-panel', 'panel', null);
+            initAutocomplete('sel-controlador', 'controlador', null);
+            initAutocomplete('sel-breaker-ac', 'breaker', 'ac');
+            initAutocomplete('sel-breaker-dc', 'breaker', 'dc');
+            initAutocomplete('sel-cable', 'cable', 'solar');
+        }
+
+        selectKitItem(id, value, text) {
+            const input = document.getElementById('input-' + id);
+            const hidden = document.getElementById(id);
+            const list = document.getElementById('list-' + id);
+            
+            hidden.value = value;
+            input.value = value === 'NA' ? '' : text;
+            list.style.display = 'none';
+            app.plugins.Budget.procesarKitSolar('auto');
+        }
+
+        actualizarDatosTicket() {
+            document.getElementById('tkt-nombre').innerText = localStorage.getItem('conf_nombre') || 'MI EMPRESA C.A.';
+            
+            const rif = localStorage.getItem('conf_rif');
+            document.getElementById('tkt-rif').innerText = rif ? 'RIF/NIT: ' + rif : '';
+            
+            document.getElementById('tkt-dir').innerText = localStorage.getItem('conf_dir') || '';
+            
+            const tlf = localStorage.getItem('conf_tlf');
+            document.getElementById('tkt-tlf').innerText = tlf ? 'Telf: ' + tlf : '';
+            
+            document.getElementById('tkt-dias').innerText = localStorage.getItem('conf_dias') || '3';
+        }
+
+        generarTextoPresupuesto() {
+            const empNombre = localStorage.getItem('conf_nombre') || 'Nuestra Empresa';
+            const empRif = localStorage.getItem('conf_rif') || '';
+            const empTlf = localStorage.getItem('conf_tlf') || '';
+            const empDir = localStorage.getItem('conf_dir') || '';
+            
+            const cliNombre = document.getElementById('clienteNombre').value || 'Cliente General';
+            const cliCedula = document.getElementById('clienteCedula').value || '';
+            const granTotal = document.getElementById('granTotal').innerText;
+            const validez = localStorage.getItem('conf_dias') || '3';
+            
+            let texto = `*${empNombre}*\n`;
+            if(empRif) texto += `RIF/NIT: ${empRif}\n`;
+            if(empDir) texto += `${empDir}\n`;
+            if(empTlf) texto += `Telf: ${empTlf}\n`;
+            texto += `------------------------\n`;
+            texto += `*PRESUPUESTO*\n`;
+            texto += `------------------------\n`;
+            texto += `*Cliente:* ${cliNombre}\n`;
+            if(cliCedula) texto += `*ID:* ${cliCedula}\n`;
+            texto += `------------------------\n\n`;
+            
+            const budget = this.ctx.plugins.Budget;
+            
+            budget.itemsPresupuesto.forEach(item => {
+                if(!item.isSolar) {
+                    texto += `_${item.cantidad}x_ ${item.nombre}\n*$${item.subtotal.toFixed(2)}*\n\n`;
+                }
+            });
+            
+            if(budget.cargas.length > 0) {
+                texto += `*Kit Solar Dimensionado*\n`;
+                budget.itemsPresupuesto.forEach(item => {
+                    if(item.isSolar) {
+                        texto += `_${item.cantidad}x_ ${item.nombre}\n*$${item.subtotal.toFixed(2)}*\n\n`;
+                    }
+                });
+            }
+            
+            texto += `------------------------\n`;
+            texto += `*TOTAL A PAGAR: $${granTotal}*\n`;
+            texto += `------------------------\n`;
+            texto += `Válido por ${validez} días.\n¡Gracias por preferirnos!`;
+            
+            return texto;
+        }
+
+        seleccionarCliente(c) {
+            document.getElementById('buscadorCliente').value = '';
+            document.getElementById('listaClientes').style.display = 'none';
+            document.getElementById('clienteNombre').value = c.nombre;
+            document.getElementById('clienteCedula').value = c.numero_id;
+            document.getElementById('clienteTelefono').value = c.celular;
+            
+            const infoBox = document.getElementById('client-info');
+            infoBox.style.display = 'block';
+            document.getElementById('info-cliente-nombre').innerText = `✅ Cliente Encontrado: ${c.nombre}`;
+            document.getElementById('info-cliente-credito').innerText = `$${c.limite_credito || 0}`;
+            document.getElementById('info-cliente-deuda').innerText = `$${c.saldo_negativo_historico || 0}`;
+            
+            infoBox.className = c.saldo_negativo_historico > 0 ? 'client-info-box has-debt' : 'client-info-box';
+        }
+
+        renderTienda(filtro) {
+            if(!this.db) return;
+            const grid = document.getElementById('gridTienda');
+            grid.innerHTML = '';
+            const val = filtro.toLowerCase();
+            const prods = this.db.productos.filter(p => p.nombre.toLowerCase().includes(val) || (p.categoria && p.categoria.toLowerCase().includes(val))).slice(0, 30);
+            
+            prods.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <h4>📦 ${p.nombre}</h4>
+                    <span style="font-size:0.75rem; color:#94a3b8;">Ref: ${p.codigo_barras || p.id} | Cat: ${p.categoria || 'N/A'}</span>
+                    <div class="prices">
+                        <span>Detal: <strong>$${p.precio?.toFixed(2) || 0}</strong></span>
+                        <span>Mayor: <strong>$${p.precio_mayor?.toFixed(2) || 0}</strong></span>
+                    </div>
+                    <div class="product-actions">
+                        <button class="btn-add" style="padding: 8px; font-size: 0.85rem;" onclick="app.plugins.UI.addDeTienda('${p.nombre}', ${p.precio})">✚ Detal</button>
+                        <button class="btn-add btn-secondary" style="padding: 8px; font-size: 0.85rem;" onclick="app.plugins.UI.addDeTienda('${p.nombre}', ${p.precio_mayor})">✚ Mayor</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        addDeTienda(nombre, precio) { this.ctx.emit('ui:add_tienda_item', { nombre, cantidad: 1, precio }); }
+
+        renderPresupuesto(data) {
+            const lc = document.getElementById('listaCargas');
+            lc.innerHTML = data.cargas.map(c => `<div style="font-size:0.85rem; padding: 5px; border-bottom:1px solid #eee;">🔌 ${c.cantidad}x ${c.nombre} (${c.watts}W) <button onclick="app.emit('ui:delete_carga', ${c.id})" style="float:right; border:none; background:red; color:white; border-radius:4px; cursor:pointer;">x</button></div>`).join('');
+            
+            const area = document.getElementById('areaResultados');
+            const lista = document.getElementById('listaPresupuesto');
+            const resSolar = document.getElementById('resultados-solar');
+            const listaRes = document.getElementById('listaResultadosSolar');
+            
+            lista.innerHTML = '';
+            
+            // Render Kit Solar summary in Kit Solar tab
+            const solarItems = data.items.filter(i => i.isSolar);
+            let tSolar = 0;
+            if(solarItems.length > 0) {
+                resSolar.style.display = 'block';
+                listaRes.innerHTML = solarItems.map(i => {
+                    tSolar += i.subtotal;
+                    return `
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #ccc; padding-bottom: 5px; margin-bottom: 5px;">
+                        <strong style="font-size: 0.9rem;">${i.cantidad}x ${i.nombre}</strong>
+                        <span style="color: var(--primary); font-weight: bold;">$${i.subtotal.toFixed(2)}</span>
+                    </div>
+                `}).join('');
+                document.getElementById('total-kit-solar').innerText = tSolar.toFixed(2);
+            } else {
+                resSolar.style.display = 'none';
+                listaRes.innerHTML = '';
+                document.getElementById('total-kit-solar').innerText = '0.00';
+            }
+
+            if(data.items.length === 0) { area.style.display = 'none'; return; }
+            area.style.display = 'block';
+
+            let gTotal = 0;
+            data.items.forEach(item => {
+                gTotal += item.subtotal;
+                const esSolar = item.isSolar ? 'disabled' : '';
+                lista.innerHTML += `
+                    <li>
+                        <div class="row-top">
+                            <span style="flex:1; font-weight:bold; font-size:0.9rem;">${item.nombre}</span>
+                            <span class="combo-price">$${item.subtotal.toFixed(2)}</span>
+                        </div>
+                        <div class="qty-container">
+                            <input type="number" class="qty-input" value="${item.cantidad}" ${esSolar} onchange="app.emit('ui:update_item', {id: '${item.id}', cantidad: this.value, precio: ${item.precioUnitario}})">
+                            <span> a $</span>
+                            <input type="number" class="price-input" value="${item.precioUnitario.toFixed(2)}" ${esSolar} onchange="app.emit('ui:update_item', {id: '${item.id}', cantidad: ${item.cantidad}, precio: this.value})">
+                            <span> c/u </span>
+                            ${!item.isSolar ? `<button onclick="app.emit('ui:remove_item', '${item.id}')" style="margin-left:auto; border:none; background:#fee2e2; color:red; border-radius:4px; padding:4px 8px; font-weight:bold; cursor:pointer;">Eliminar</button>` : ''}
+                        </div>
+                    </li>
+                `;
+            });
+            document.getElementById('granTotal').innerText = gTotal.toFixed(2);
+        }
+
+        dispararGuardado() {
+            const items = app.plugins.Budget.itemsPresupuesto;
+            const cargas = app.plugins.Budget.cargas;
+            if (items.length === 0) return;
+
+            const cliente = {
+                nombre: document.getElementById('clienteNombre').value || "Cliente Mostrador",
+                cedula: document.getElementById('clienteCedula').value || "N/A",
+                telefono: document.getElementById('clienteTelefono').value || "N/A"
+            };
+            const total = document.getElementById('granTotal').innerText;
+
+            this.ctx.emit('budget:save_record', { cliente, total, items, cargas });
+        }
+
+        renderRegistros(history) {
+            const container = document.getElementById('lista-registros');
+            if (history.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#64748b; padding: 20px;">No has guardado/impreso ningún presupuesto aún.</p>';
+                return;
+            }
+            container.innerHTML = history.map(r => `
+                <div style="border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-bottom:10px; background:white; position:relative;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <strong>👤 ${r.cliente.nombre}</strong>
+                        <span style="color:#64748b; font-size:0.75rem;">📅 ${new Date(r.fecha).toLocaleDateString()} ${new Date(r.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                    <div style="font-size:0.85rem; color:#475569; margin-bottom:12px;">
+                        📦 ${r.items.length} Items | Total: <strong style="color:var(--primary);">$${r.total}</strong>
+                    </div>
+                    <button class="btn-action btn-wa" style="width:100%; padding:10px;" onclick="app.plugins.UI.cargarYVerRegistro(${r.id})">📂 Recuperar Presupuesto</button>
+                </div>
+            `).join('');
+        }
+
+        cargarYVerRegistro(id) {
+            const record = app.plugins.Records.history.find(r => r.id === id);
+            if(!record) return;
+
+            document.getElementById('clienteNombre').value = record.cliente.nombre === "Cliente Mostrador" ? "" : record.cliente.nombre;
+            document.getElementById('clienteCedula').value = record.cliente.cedula === "N/A" ? "" : record.cliente.cedula;
+            document.getElementById('clienteTelefono').value = record.cliente.telefono === "N/A" ? "" : record.cliente.telefono;
+
+            this.ctx.emit('budget:load_record', record);
+            document.querySelector('[data-target="tab-cotizador"]').click();
+        }
+    }
+
+    app.use('Data', DataPlugin);
+    app.use('Records', RecordsPlugin);
+    app.use('Budget', BudgetPlugin);
+    app.use('UI', UIPlugin);
+
+</script>
+
+<script>
+    // Registrar el Service Worker para funcionamiento PWA (Offline)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                console.log('Service Worker registrado correctamente (PWA activa). Scope:', reg.scope);
+            }).catch(err => {
+                console.warn('Error al registrar Service Worker:', err);
+            });
+        });
+    }
+
+    // Manejar el aviso de "Añadir a la Pantalla de Inicio" (Install Prompt)
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Previene que aparezca la barra predeterminada al instante (para tener control)
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Muestra nuestro propio botón de instalación en la barra superior
+        const btnInstall = document.getElementById('btn-install');
+        if (btnInstall) {
+            btnInstall.style.display = 'inline-block';
+            
+            btnInstall.addEventListener('click', async () => {
+                // Ocultar botón y lanzar el aviso nativo
+                btnInstall.style.display = 'none';
+                deferredPrompt.prompt();
+                
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`Respuesta del usuario a la instalación: ${outcome}`);
+                deferredPrompt = null;
+            });
+        }
+    });
+
+    window.addEventListener('appinstalled', () => {
+        console.log('La aplicación PWA fue instalada exitosamente.');
+        const btnInstall = document.getElementById('btn-install');
+        if(btnInstall) btnInstall.style.display = 'none';
+    });
+</script>
+
+</body>
+</html>
