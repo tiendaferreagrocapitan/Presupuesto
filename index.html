@@ -637,10 +637,16 @@
                 this.procesarKitSolar();
             });
             this.ctx.on('ui:add_tienda_item', (item) => {
-                this.itemsPresupuesto.push({
-                    id: Date.now().toString(), isSolar: false, nombre: item.nombre, cantidad: item.cantidad,
-                    precioUnitario: item.precio, subtotal: item.cantidad * item.precio
-                });
+                let existing = this.itemsPresupuesto.find(i => i.nombre === item.nombre && i.precioUnitario === item.precio && !i.isSolar);
+                if (existing) {
+                    existing.cantidad += item.cantidad;
+                    existing.subtotal = existing.cantidad * existing.precioUnitario;
+                } else {
+                    this.itemsPresupuesto.push({
+                        id: Date.now().toString() + Math.floor(Math.random() * 1000), isSolar: false, nombre: item.nombre, cantidad: item.cantidad,
+                        precioUnitario: item.precio, subtotal: item.cantidad * item.precio
+                    });
+                }
                 this.procesarKitSolar();
             });
             this.ctx.on('ui:remove_item', (id) => {
