@@ -1084,6 +1084,9 @@
                         <span>Detal: <strong>$${p.precio?.toFixed(2) || 0}</strong></span>
                         <span>Mayor: <strong>$${p.precio_mayor?.toFixed(2) || 0}</strong></span>
                     </div>
+                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 8px; text-align: center;">
+                        Disponibles: <strong style="color: var(--primary);">${p.stock !== undefined ? p.stock : 'N/A'}</strong>
+                    </div>
                     <div class="product-actions">
                         <button class="btn-add" style="padding: 8px; font-size: 0.85rem;" onclick="app.plugins.UI.addDeTienda('${p.nombre}', ${p.precio})">✚ Detal</button>
                         <button class="btn-add btn-secondary" style="padding: 8px; font-size: 0.85rem;" onclick="app.plugins.UI.addDeTienda('${p.nombre}', ${p.precio_mayor})">✚ Mayor</button>
