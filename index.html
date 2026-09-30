@@ -194,7 +194,10 @@
                 </div>
                 <div class="form-group">
                     <label>Teléfono (WhatsApp)</label>
-                    <input type="tel" id="clienteTelefono" placeholder="Ej. 04141234567">
+                    <div style="display: flex; gap: 5px;">
+                        <input type="tel" id="clienteTelefono" placeholder="Ej. 04141234567" style="flex:1;">
+                        <button id="btn-contactos" type="button" style="padding: 0 10px; border-radius: 4px; border: 1px solid var(--primary); background: white; cursor: pointer; color: var(--primary);" title="Abrir Contactos" onclick="app.plugins.UI.seleccionarContacto()">📱</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -854,6 +857,10 @@
                 this.dispararGuardado();
                 const texto = encodeURIComponent(this.generarTextoPresupuesto());
                 let tlf = document.getElementById('clienteTelefono').value.replace(/\D/g, '');
+                if (tlf) {
+                    if (tlf.startsWith('0')) tlf = tlf.substring(1);
+                    if (!tlf.startsWith('58')) tlf = '58' + tlf;
+                }
                 let url = tlf ? `https://wa.me/${tlf}?text=${texto}` : `https://wa.me/?text=${texto}`;
                 window.open(url, '_blank');
             };
@@ -1065,6 +1072,30 @@
             document.getElementById('info-cliente-deuda').innerText = `$${c.saldo_negativo_historico || 0}`;
             
             infoBox.className = c.saldo_negativo_historico > 0 ? 'client-info-box has-debt' : 'client-info-box';
+        }
+
+        async seleccionarContacto() {
+            const supported = ('contacts' in navigator && 'ContactsManager' in window);
+            if (!supported) {
+                alert('La selección de contactos nativa no está soportada en tu navegador actual o necesitas usar la PWA instalada.');
+                return;
+            }
+            try {
+                const props = ['name', 'tel'];
+                const opts = {multiple: false};
+                const contacts = await navigator.contacts.select(props, opts);
+                if (contacts && contacts.length > 0) {
+                    const contact = contacts[0];
+                    if (contact.tel && contact.tel.length > 0) {
+                        document.getElementById('clienteTelefono').value = contact.tel[0];
+                    }
+                    if (contact.name && contact.name.length > 0) {
+                        document.getElementById('clienteNombre').value = contact.name[0];
+                    }
+                }
+            } catch (ex) {
+                console.error('Error al seleccionar contacto:', ex);
+            }
         }
 
         renderTienda(filtro) {
