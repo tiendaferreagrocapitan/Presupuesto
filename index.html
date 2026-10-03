@@ -484,9 +484,20 @@
             this.ctx.on('config:loaded', async (config) => {
                 const statusBadge = document.getElementById('db-status');
                 
-                const cacheLocal = localStorage.getItem('cached_pos_db');
+                let cacheLocal = localStorage.getItem('cached_pos_db');
+                // Invalidar caché antiguo que no tenga deuda_real calculada
                 if (cacheLocal) {
-                    this.db = JSON.parse(cacheLocal);
+                    const cachedData = JSON.parse(cacheLocal);
+                    const primeCliente = cachedData.clientes && cachedData.clientes[0];
+                    if (primeCliente && primeCliente.deuda_real === undefined) {
+                        console.log('Caché antiguo detectado (sin deuda_real). Forzando resincronización...');
+                        localStorage.removeItem('cached_pos_db');
+                        cacheLocal = null;
+                    } else {
+                        this.db = cachedData;
+                    }
+                }
+                if (cacheLocal) {
                     statusBadge.className = 'status-badge loading'; 
                     statusBadge.innerText = 'Verificando nube...';
                 } else {
@@ -539,8 +550,38 @@
                         } catch (e) { return []; }
                     };
 
-                    const tablasAEscanear = ['clientes', 'productos', 'categorias', 'proveedores', 'config_empresa', 'usuarios'];
+                    // Extracción especial de clientes con deuda REAL calculada desde movimientos
+                    const extractClientes = () => {
+                        try {
+                            const sql = `
+                                SELECT c.*,
+                                    COALESCE(SUM(CASE WHEN m.tipo='CARGO' THEN m.monto ELSE 0 END), 0)
+                                    - COALESCE(SUM(CASE WHEN m.tipo='ABONO' THEN m.monto ELSE 0 END), 0)
+                                    AS deuda_real
+                                FROM clientes c
+                                LEFT JOIN movimientos_clientes m ON m.cliente_id = c.id
+                                GROUP BY c.id
+                            `;
+                            const result = dbSQLite.exec(sql);
+                            if (result.length === 0) return [];
+                            const cols = result[0].columns;
+                            return result[0].values.map(row => {
+                                let obj = {};
+                                cols.forEach((col, i) => obj[col] = row[i]);
+                                return obj;
+                            });
+                        } catch (e) { console.error('Error extractClientes:', e); return extractTable('clientes'); }
+                    };
+
+                    const tablasAEscanear = ['productos', 'categorias', 'proveedores', 'config_empresa', 'usuarios'];
                     let totalDescargado = 0;
+
+                    // Cargar clientes con deuda real calculada
+                    const clientesData = extractClientes();
+                    if (clientesData.length > 0) {
+                        newDb['clientes'] = clientesData;
+                        totalDescargado += clientesData.length;
+                    }
                     
                     tablasAEscanear.forEach(t => {
                         const data = extractTable(t);
@@ -1071,13 +1112,16 @@
             document.getElementById('clienteCedula').value = c.numero_id;
             document.getElementById('clienteTelefono').value = c.celular;
             
+            // Usar deuda_real (calculada desde movimientos) si existe; sino usar saldo_negativo_historico como respaldo
+            const deuda = (c.deuda_real !== undefined && c.deuda_real !== null) ? c.deuda_real : (c.saldo_negativo_historico || 0);
+            
             const infoBox = document.getElementById('client-info');
             infoBox.style.display = 'block';
             document.getElementById('info-cliente-nombre').innerText = `✅ Cliente Encontrado: ${c.nombre}`;
             document.getElementById('info-cliente-credito').innerText = `$${c.limite_credito || 0}`;
-            document.getElementById('info-cliente-deuda').innerText = `$${c.saldo_negativo_historico || 0}`;
+            document.getElementById('info-cliente-deuda').innerText = `$${deuda.toFixed(2)}`;
             
-            infoBox.className = c.saldo_negativo_historico > 0 ? 'client-info-box has-debt' : 'client-info-box';
+            infoBox.className = deuda > 0 ? 'client-info-box has-debt' : 'client-info-box';
         }
 
         async seleccionarContacto() {
