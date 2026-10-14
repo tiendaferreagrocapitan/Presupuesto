@@ -153,6 +153,7 @@
         <h1>🛒 Punto de Venta (POS)</h1>
         <div style="text-align: center; margin-bottom: 15px;">
             <span id="db-status" class="status-badge offline">Cargando base de datos...</span>
+            &nbsp;<span class="status-badge" style="background:#dbeafe;color:#1d4ed8;" title="Versión de la aplicación">v5</span>
         </div>
         
         <!-- DATOS DEL CLIENTE -->
@@ -1158,21 +1159,39 @@
             prods.forEach(p => {
                 const card = document.createElement('div');
                 card.className = 'product-card';
+                
+                // Escapamos el nombre para mostrarlo en HTML de forma segura
+                const nombreSeguro = p.nombre.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const precioDetal = (p.precio || 0);
+                const precioMayor = (p.precio_mayor || 0);
+                
                 card.innerHTML = `
-                    <h4>📦 ${p.nombre}</h4>
+                    <h4>📦 ${nombreSeguro}</h4>
                     <span style="font-size:0.75rem; color:#94a3b8;">Ref: ${p.codigo_barras || p.id} | Cat: ${p.categoria || 'N/A'}</span>
                     <div class="prices">
-                        <span>Detal: <strong>$${p.precio?.toFixed(2) || 0}</strong></span>
-                        <span>Mayor: <strong>$${p.precio_mayor?.toFixed(2) || 0}</strong></span>
+                        <span>Detal: <strong>$${precioDetal.toFixed(2)}</strong></span>
+                        <span>Mayor: <strong>$${precioMayor.toFixed(2)}</strong></span>
                     </div>
                     <div style="font-size: 0.8rem; color: #475569; margin-bottom: 8px; text-align: center;">
                         Disponibles: <strong style="color: var(--primary);">${p.stock !== undefined ? p.stock : 'N/A'}</strong>
                     </div>
                     <div class="product-actions">
-                        <button class="btn-add" style="padding: 8px; font-size: 0.85rem;" onclick="app.plugins.UI.addDeTienda('${p.nombre}', ${p.precio})">✚ Detal</button>
-                        <button class="btn-add btn-secondary" style="padding: 8px; font-size: 0.85rem;" onclick="app.plugins.UI.addDeTienda('${p.nombre}', ${p.precio_mayor})">✚ Mayor</button>
+                        <button class="btn-add btn-tienda-detal" style="padding: 8px; font-size: 0.85rem;">✚ Detal</button>
+                        <button class="btn-add btn-secondary btn-tienda-mayor" style="padding: 8px; font-size: 0.85rem;">✚ Mayor</button>
                     </div>
                 `;
+                
+                // Usamos data-attributes para pasar el nombre y precio sin riesgo de romper el HTML/JS
+                const btnDetal = card.querySelector('.btn-tienda-detal');
+                const btnMayor = card.querySelector('.btn-tienda-mayor');
+                btnDetal.dataset.nombre = p.nombre;
+                btnDetal.dataset.precio = precioDetal;
+                btnMayor.dataset.nombre = p.nombre;
+                btnMayor.dataset.precio = precioMayor;
+                
+                btnDetal.addEventListener('click', () => this.addDeTienda(p.nombre, precioDetal));
+                btnMayor.addEventListener('click', () => this.addDeTienda(p.nombre, precioMayor));
+                
                 grid.appendChild(card);
             });
         }
