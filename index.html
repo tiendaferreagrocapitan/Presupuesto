@@ -153,7 +153,7 @@
         <h1>🛒 Punto de Venta (POS)</h1>
         <div style="text-align: center; margin-bottom: 15px;">
             <span id="db-status" class="status-badge offline">Cargando base de datos...</span>
-            &nbsp;<span class="status-badge" style="background:#dbeafe;color:#1d4ed8;" title="Versión de la aplicación">v5</span>
+            &nbsp;<span class="status-badge" style="background:#dbeafe;color:#1d4ed8;" title="Versión de la aplicación">v6</span>
         </div>
         
         <!-- DATOS DEL CLIENTE -->
@@ -533,7 +533,25 @@
                     if (!res.ok) throw new Error(`HTTP ${res.status} - No se encontró el archivo en Storage`);
                     
                     const buffer = await res.arrayBuffer();
-                    const dbSQLite = new SQL.Database(new Uint8Array(buffer));
+                    let dbBytes = new Uint8Array(buffer);
+
+                    // Auto-reparación preventiva si el archivo en la nube quedó truncado por cierre/subida en caliente
+                    if (dbBytes.length >= 100) {
+                        let pageSize = (dbBytes[16] << 8) | dbBytes[17];
+                        if (pageSize === 1) pageSize = 65536;
+                        if (pageSize >= 512 && (pageSize & (pageSize - 1)) === 0) {
+                            const headerPages = ((dbBytes[28] << 24) | (dbBytes[29] << 16) | (dbBytes[30] << 8) | dbBytes[31]) >>> 0;
+                            const actualPages = Math.floor(dbBytes.length / pageSize);
+                            if (headerPages > actualPages) {
+                                console.warn(`[SQLite Sync] Base truncada detectada: el encabezado indica ${headerPages} páginas (${headerPages * pageSize} bytes) pero se descargaron ${actualPages} páginas (${dbBytes.length} bytes). Auto-reparando en memoria...`);
+                                const padded = new Uint8Array(headerPages * pageSize);
+                                padded.set(dbBytes);
+                                dbBytes = padded;
+                            }
+                        }
+                    }
+
+                    const dbSQLite = new SQL.Database(dbBytes);
                     
                     let newDb = { ...this.db };
                     
@@ -548,7 +566,10 @@
                                 cols.forEach((col, i) => obj[col] = row[i]);
                                 return obj;
                             });
-                        } catch (e) { return []; }
+                        } catch (e) {
+                            console.warn(`[SQLite Sync] No se pudo leer la tabla '${tName}':`, e.message || e);
+                            return [];
+                        }
                     };
 
                     // Extracción especial de clientes con deuda REAL calculada desde movimientos

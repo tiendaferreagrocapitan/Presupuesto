@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-solar-cache-v5';
+const CACHE_NAME = 'pos-solar-cache-v6';
 const urlsToCache = [
   './',
   './index.html',
